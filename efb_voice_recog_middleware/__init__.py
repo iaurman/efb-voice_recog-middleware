@@ -90,7 +90,8 @@ class VoiceRecogMiddleware(Middleware):
                     if len(data) > 1000:
                         data = data[:1000] + " ..."
                     results.append(
-                        f'\n{engine_name} ({lang}): {data}')
+                        # f'\n{engine_name} ({lang}): {data}')
+                        f'\n{data}')
                 except Exception as exc:
                     results.append(f'\n{engine_name} ({lang}): {repr(exc)}')
             return results
@@ -149,7 +150,9 @@ class VoiceRecogMiddleware(Middleware):
             name=f"VoiceRecog thread {audio_msg.uid}"
             ).start()
         if not drop:
-            return message
+            # Not return the original text
+            return None
+            # return message
 
     def process_audio(self, message: Message, audio: NamedTemporaryFile):
         try:
@@ -162,7 +165,13 @@ class VoiceRecogMiddleware(Middleware):
         message.text += reply_text
         message.text = message.text[:4000]
 
+        # Remove the voice file
         # message.file = None
+        # message.filename = None
+        # message.mine = None
+        # message.path = None
+        # message.type = MsgType.Text
+
         message.edit = True
         message.edit_media = False
         coordinator.send_message(message)

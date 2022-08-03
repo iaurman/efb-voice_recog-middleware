@@ -90,8 +90,10 @@ class VoiceRecogMiddleware(Middleware):
                     data = "; ".join(future.result())
                     if len(data) > 1000:
                         data = data[:1000] + " ..."
-                    results.append('\n' + data.rstrip('。'))
-                        # f'\n{engine_name} ({lang}): {data}'
+                    if len(self.voice_engines) == 1:
+                        results.append(data.rstrip('。'))
+                    else:
+                        results.append(f'\n{engine_name} ({lang}): {data}')
                 except Exception as exc:
                     results.append(f'\n{engine_name} ({lang}): {repr(exc)}')
             return results

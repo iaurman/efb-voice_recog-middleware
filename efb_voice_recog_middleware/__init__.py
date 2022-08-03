@@ -20,6 +20,7 @@ from .engines.azure import AzureSpeech
 from .engines.iflytek import IFlyTekSpeech
 from .engines.tencent import TencentSpeech
 
+import time
 
 class VoiceRecogMiddleware(Middleware):
     """
@@ -89,9 +90,8 @@ class VoiceRecogMiddleware(Middleware):
                     data = "; ".join(future.result())
                     if len(data) > 1000:
                         data = data[:1000] + " ..."
-                    results.append(
-                        # f'\n{engine_name} ({lang}): {data}')
-                        f'\n{data}')
+                    results.append('\n' + data.rstrip('。'))
+                        # f'\n{engine_name} ({lang}): {data}'
                 except Exception as exc:
                     results.append(f'\n{engine_name} ({lang}): {repr(exc)}')
             return results
@@ -108,72 +108,32 @@ class VoiceRecogMiddleware(Middleware):
         Returns:
             Optional[:obj:`.Message`]: Processed message or None if discarded.
         """
-        drop = False
-        if self.sent_by_master(message) and message.text.startswith('recog`'):
-            audio_msg = message.target
-            drop = True
-        elif not self.sent_by_master(message)\
-                and self.config.get('auto', True):
-            audio_msg = message
-        else:
+        # If sent by slave channel
+        if self.sent_by_master(message):
             return message
 
+        # If a voice message
         try:
-            if audio_msg.type != MsgType.Voice or audio_msg.edit:
-                if not drop:
-                    return message
+            if message.type != MsgType.Voice:
+                return message
         except Exception as e:
-            print(f"{e}:, {audio_msg.__dict__}")
+            # Unknown error
+            print(f"{e}:, {message.__dict__}")
             raise e
 
+        # If any voice engines loaded
         if not self.voice_engines:
-            if not drop:
-                return message
+            return message
 
-        audio: NamedTemporaryFile = NamedTemporaryFile(
-            suffix=mimetypes.guess_extension(audio_msg.mime)
-        )
-        shutil.copyfileobj(audio_msg.file, audio)
-        audio.seek(0)
-        audio_msg.file.seek(0)
-        edited = copy.copy(audio_msg)
-
-        # necessary because copy.copy can't deal with chat of replied message
-        # Can be removed after the bug is fixed
-        edited.chat = copy.copy(message.chat)
-        if self.sent_by_master(message):
-            edited.author = copy.copy(message.target.author)
-
-        threading.Thread(
-            target=self.process_audio,
-            args=(edited, audio),
-            name=f"VoiceRecog thread {audio_msg.uid}"
-            ).start()
-        if not drop:
-            # Not return the original text
-            return None
-            # return message
-
-    def process_audio(self, message: Message, audio: NamedTemporaryFile):
+        # Voice Recognition
         try:
-            # reply_text: str = '\n'.join(self.recognize(audio.name, self.lang))
-            reply_text: str = '\n'.join(self.recognize(audio.name))
+            result_text: str = '\n'.join(self.recognize(message.path))
         except Exception:
-            reply_text = 'Failed to recognize voice content.'
+            result_text = 'Failed to recognize voice content.'
         if getattr(message, 'text', None) is None:
             message.text = ""
-        message.text += reply_text
+        message.text += result_text
         message.text = message.text[:4000]
 
-        # Remove the voice file
-        # message.file = None
-        # message.filename = None
-        # message.mine = None
-        # message.path = None
-        # message.type = MsgType.Text
-
-        message.edit = True
-        message.edit_media = False
-        coordinator.send_message(message)
-
-        audio.close()
+        # Return message
+        return message

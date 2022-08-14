@@ -1,7 +1,5 @@
 # coding: utf-8
 import logging
-import copy
-import threading
 import mimetypes
 from os import PathLike
 from pathlib import Path
@@ -26,7 +24,7 @@ class VoiceRecogMiddleware(Middleware):
     """
     Middleware - Voice recognize middleware
     Convert voice mesage to text message.
-    Author: Catbaron <https://github.com/catbaron>, 
+    Author: Catbaron <https://github.com/catbaron>,
             Eana Hufwe <https://1a23.com>
     """
 
@@ -127,9 +125,17 @@ class VoiceRecogMiddleware(Middleware):
         if not self.voice_engines:
             return message
 
+        # Create tmp file for the audio
+        audio: NamedTemporaryFile = NamedTemporaryFile(
+            suffix=mimetypes.guess_extension(message.mime)
+        )
+        shutil.copyfileobj(message.file, audio)
+        audio.seek(0)
+        message.file.seek(0)
+
         # Voice Recognition
         try:
-            result_text: str = '\n'.join(self.recognize(message.path))
+            result_text: str = '\n'.join(self.recognize(audio.name))
         except Exception:
             result_text = 'Failed to recognize voice content.'
         if getattr(message, 'text', None) is None:
